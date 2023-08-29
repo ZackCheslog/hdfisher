@@ -287,6 +287,8 @@ def load_cmb_fisher_derivs(derivs_dir, cmb_types=None, params=None,
         for param in params:
             derivs[cmb_type][param] = {}
             derivs_fname = config.fisher_cmb_deriv_fname(derivs_dir, cmb_type, param, use_H0=use_H0)
+            if not os.path.exists(derivs_fname):
+                raise FileNotFoundError(f"The file '{derivs_fname}' does not exist. Make sure that you have calculated Fisher derivatives before calculating a new Fisher matrix.")
             derivs_dict = utils.load_from_file(derivs_fname, cols)
             ells = derivs_dict['ells']
             # trim the multipole range
