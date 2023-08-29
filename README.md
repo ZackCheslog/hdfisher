@@ -32,7 +32,7 @@ To uninstall the code, use the command `pip uninstall hdfisher`. (Note that you 
 
 # CMB and BAO mock signal and covariance matrices
 
-We provide mock CMB-HD signal and noise lensed and delensed $TT$/$TE$/$EE$/$BB$ and lensing $\kappa\kappa$ power spectra from multipoles $30$ to $20,000$, and their associated covariance matrix. We also provide a mock DESI BAO signal and covariance matrix. These files are in the sub-directories of the `hdfisher/data` directory, and can be accessed by using the `Data` class in `hdfisher/dataconfig.py`; see the provided notebook `forecast_plots.ipynb` (described in the "Reproducing plots and tables" section below) for an example.
+We provide mock CMB-HD signal and noise lensed and delensed $TT/TE/EE/BB$ and lensing $\kappa\kappa$ power spectra from multipoles $30$ to $20,000$, and their associated covariance matrix. We also provide a mock DESI BAO signal and covariance matrix. These files are in the sub-directories of the `hdfisher/data` directory, and can be accessed by using the `Data` class in `hdfisher/dataconfig.py`; see the provided notebook `forecast_plots.ipynb` (described in the "Reproducing plots and tables" section below) for an example.
 
 
 # Reproducing plots and tables in MacInnis et. al. 2023
