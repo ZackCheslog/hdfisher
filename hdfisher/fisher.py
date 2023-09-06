@@ -60,7 +60,8 @@ def get_param_info(param_file, fisher_steps_file):
     for param in step_info.keys():
         # make sure we have a fiducial value for that param
         if param not in fids.keys():
-            raise ValueError(f"The parameter '{param}' is listed in the `fisher_steps_file` '{fisher_steps_file}', but you must also provide a fiducial value in the `param_file` '{param_file}'.")
+            err_msg = f"The parameter '{param}' is listed in the `fisher_steps_file` '{fisher_steps_file}', but you must also provide a fiducial value in the `param_file` '{param_file}'."
+            raise ValueError(err_msg)
         step = step_info[param]['step_size']
         if 'rel' in step_info[param]['step_type'].lower():
             step *= fids[param]
@@ -115,7 +116,7 @@ def get_available_cmb_fisher_derivs(derivs_dir, use_H0=False):
     ----------
     derivs_dir : str
         The directory containing the derivatives.
-    use_H0: str, default=False
+    use_H0 : bool, default=False
         If `True`, look for derivatives that were calculated by passing `'H0'`
         to CAMB when varying the other parameters, as opposed to passing
         `'cosmomc_theta'`.
@@ -174,7 +175,7 @@ def get_available_bao_fisher_derivs(derivs_dir, use_H0=False):
     ----------
     derivs_dir : str
         The directory containing the derivatives.
-    use_H0: str, default=False
+    use_H0 : bool, default=False
         If `True`, look for derivatives that were calculated by passing `'H0'`
         to CAMB when varying the other parameters, as opposed to passing
         `'cosmomc_theta'`.
@@ -233,7 +234,7 @@ def load_cmb_fisher_derivs(derivs_dir, cmb_types=None, params=None,
         A list of parameter names. If `None`, uses all available parameters.
     spectra : list of str, default=['tt', 'te', 'ee', 'bb', 'kk']
         A list of spectra to return for each combination of CMB type and parameter.
-    use_H0: str, default=False
+    use_H0 : bool, default=False
         If `True`, look for derivatives that were calculated by passing `'H0'`
         to CAMB when varying the other parameters, as opposed to passing
         `'cosmomc_theta'`.
@@ -282,13 +283,15 @@ def load_cmb_fisher_derivs(derivs_dir, cmb_types=None, params=None,
     for cmb_type in cmb_types:
         cmb_type = cmb_type.lower()
         if cmb_type not in valid_cmb_types:
-            raise ValueError(f"You passed an unknown CMB type `'{cmb_type}'` in `cmb_types`. The options are {valid_cmb_types}.")
+            err_msg = f"You passed an unknown CMB type `'{cmb_type}'` in `cmb_types`. The options are {valid_cmb_types}."
+            raise ValueError(err_msg)
         derivs[cmb_type] = {}
         for param in params:
             derivs[cmb_type][param] = {}
             derivs_fname = config.fisher_cmb_deriv_fname(derivs_dir, cmb_type, param, use_H0=use_H0)
             if not os.path.exists(derivs_fname):
-                raise FileNotFoundError(f"The file '{derivs_fname}' does not exist. Make sure that you have calculated Fisher derivatives before calculating a new Fisher matrix.")
+                err_msg = f"The file '{derivs_fname}' does not exist. Make sure that you have calculated Fisher derivatives before calculating a new Fisher matrix."
+                raise FileNotFoundError(err_msg)
             derivs_dict = utils.load_from_file(derivs_fname, cols)
             ells = derivs_dict['ells']
             # trim the multipole range
@@ -313,7 +316,7 @@ def load_bao_fisher_derivs(derivs_dir, params=None, use_H0=False):
         The directory to load the files from.
     params : list of str, default=None
         A list of parameter names. If `None`, uses all available parameters.
-    use_H0: str, default=False
+    use_H0 : bool, default=False
         If `True`, look for derivatives that were calculated by passing `'H0'`
         to CAMB when varying the other parameters, as opposed to passing
         `'cosmomc_theta'`.
@@ -521,16 +524,38 @@ def get_fisher_errors(fisher_matrix, params, fname=None):
     return errors
 
 
-def add_fishers(fisher_matrix1, fisher_params1, 
-                fisher_matrix2, fisher_params2, 
-                priors=None):
-    # TODO: docstring
+def add_fishers(fisher_matrix1, fisher_params1, fisher_matrix2, fisher_params2,
+        priors=None):
+    """Returns the sum of two Fisher matrices.
+    
+    Parameters
+    ----------
+    fisher_matrix1, fisher_matrix2 : array_like of float
+        The two-dimensional arrays holding the two Fisher matrices to add.
+    fisher_params1, fisher_params2 : list of str
+        Lists of parameter names for the parameters in `fisher_matrix1` and
+        `fisher_matrix2`, respectively, in the same order that they appear
+        in the rows/columns of the Fisher matrix.
+    priors : None or dict of float, default=None
+        If not `None`, provide any Gaussian priors with the parameter name
+        as the key and the prior as the value, e.g. `{'tau': 0.007}`, to 
+        be applied to the sum of the two Fisher matrices.
+
+    Returns
+    -------
+    fisher_matrix : array_like of float
+        A two-dimensional array holding the new Fisher matrix.
+    fisher_params : list of str
+        A list of parameter names for the parameters contained in the
+        `fisher_matrix`, in the correct order.
+    """
     # convert each Fisher matrix to a `pandas.DataFrame` instance to
-    # deal with missing params, different ordering, etc.
+    # deal with missing params, different ordering, etc.:
     df1 = pd.DataFrame(fisher_matrix1.copy(), columns=fisher_params1.copy(), index=fisher_params1.copy(), copy=True)
     df2 = pd.DataFrame(fisher_matrix2.copy(), columns=fisher_params2.copy(), index=fisher_params2.copy(), copy=True)
     df_sum = df1.add(df2, fill_value=0)
-    if priors is None:
+    # add any priors:
+    if priors is None: 
         fisher_matrix = df_sum.values.copy()
         fisher_params = df_sum.columns.tolist().copy()
     else:
@@ -545,24 +570,84 @@ def add_fishers(fisher_matrix1, fisher_params1,
         fisher_params = df_final.columns.tolist().copy()
     return fisher_matrix, fisher_params
 
+
 def add_priors(fisher_matrix, fisher_params, priors):
-    # TODO: docstring
+    """Apply (a) Gaussian prior(s) to a Fisher matrix.
+    
+    Parameters
+    ----------
+    fisher_matrix : array_like of float
+        The two-dimensional Fisher matrix.
+    fisher_params : list of str
+        A list of parameter names, in the same order as their rows/columns
+        in the Fisher matrix.
+    priors : dict of float
+        A dictionary containing the Gaussian prior(s) with the parameter name
+        as the key and the prior as the value, e.g. `{'tau': 0.007}`.  
+
+    Returns
+    -------
+    fisher_with_prior : array_like of float
+        A two-dimensional array holding the Fisher matrix with the prior(s)
+        applied and the parameter order unchanged.
+    """
     fisher_with_prior = fisher_matrix.copy()
     for i, param in enumerate(fisher_params):
         if param in priors.keys():
             fisher_with_prior[i, i] += 1 / priors[param]**2
     return fisher_with_prior
 
+
 def remove_params(fisher_matrix, fisher_params, params_to_remove):
-    # TODO: docstring
+    """Returns a Fisher matrix without the rows and columns corresponding
+    to each parameter in the list `params_to_remove`.
+
+    Parameters
+    ----------
+    fisher_matrix : array_like of float
+        The two-dimensional Fisher matrix.
+    fisher_params : list of str
+        A list of parameter names, in the same order as their rows/columns
+        in the Fisher matrix.
+    params_to_remove : list of str
+        A list of names of parameters that will be removed from the Fisher
+        matrix.
+
+    Returns
+    -------
+    new_fisher_matrix : array_like of float
+        A two-dimensional array holding the new Fisher matrix.
+    new_fisher_params : list of str
+        A list of parameter names for the parameters contained in the
+        `fisher_matrix`, in the correct order.
+    """
     df = pd.DataFrame(fisher_matrix.copy(), columns=fisher_params.copy(), index=fisher_params.copy(), copy=True)
     df.drop(index=params_to_remove, columns=params_to_remove, inplace=True)
     new_fisher_matrix = df.values.copy()
     new_fisher_params = df.columns.tolist().copy()
     return new_fisher_matrix, new_fisher_params
 
+
 def remove_zeros(fisher_matrix, fisher_params):
-    # TODO: docstring
+    """Returns a Fisher matrix where all rows and columns that contain only
+    zeros have been removed.
+
+    Parameters
+    ----------
+    fisher_matrix : array_like of float
+        The two-dimensional Fisher matrix.
+    fisher_params : list of str
+        A list of parameter names, in the same order as their rows/columns
+        in the Fisher matrix.
+
+    Returns
+    -------
+    new_fisher_matrix : array_like of float
+        A two-dimensional array holding the new Fisher matrix.
+    new_fisher_params : list of str
+        A list of parameter names for the parameters contained in the
+        `fisher_matrix`, in the correct order.
+    """
     nparams = len(fisher_params)
     params_to_remove = []
     for i, param in enumerate(fisher_params):
@@ -570,10 +655,8 @@ def remove_zeros(fisher_matrix, fisher_params):
             params_to_remove.append(param)
     new_fisher_matrix, new_fisher_params = remove_params(fisher_matrix, fisher_params, params_to_remove)
     return new_fisher_matrix, new_fisher_params
-    
+ 
 
-
-    
 def get_common_params(list_of_dicts):
     """Returns a list of parameter names that appear as keys for each 
     dictionary in the `list_of_dicts`.
@@ -600,10 +683,125 @@ def get_common_params(list_of_dicts):
 
 
 class Fisher:
-    def __init__(self, exp, fisher_dir, overwrite=False, fisher_params=None, 
-            param_file=None, fisher_steps_file=None, feedback=False, 
+    """Calculate new Fisher derivatives and matrices from the mock CMB
+    and BAO covariance matrices provided with `hdfisher`.
+    """
+    
+    def __init__(self, exp, fisher_dir, overwrite=False, param_file=None, 
+            fisher_steps_file=None, feedback=False, fisher_params=None, 
             use_H0=False, hd_lmax=None, include_fg=True):
-        # TODO: docstring
+        """Initialization for a given experimental configuration and set
+        of parameters to be included in the Fisher matrix.
+
+        Parameters
+        ----------
+        exp : str
+            The name of a CMB experiment, used to load its covariance matrix
+            and set the multipole ranges for the theory that is used to 
+            calculate the Fisher matrix. Must be either `'SO'`, `'S4'`, or 
+            `'HD`'. The name is case-insensitive.
+        fisher_dir : str
+            The absolute path to a directory in which the theory and its
+            derivatives used to calculate the Fisher matrix, and the 
+            calculated Fisher matrices, will be saved. The directory will 
+            be created if it does not exist.
+        overwrite : bool, default=False
+            If `False`, any Fisher derivatives or matrices that are saved
+            in the `fisher_dir` will be loaded. Otherwise, if `True`, the
+            results will be re-calculated, and their files will be 
+            over-written by the new calculations.
+        param_file : str or None, default=None
+            The name (including the full path) of a YAML file containing
+            the names and fiducial values of cosmological parameters used
+            in the theory calculation, and any other names that can be passed
+            to the CAMB function `camb.set_params()` (e.g., accuracy 
+            parameters). Each entry in the file should have its own line
+            in the format `param_name: value`. If `param_file=None`, the 
+            default file included with `hdfisher` is used.
+        fisher_steps_file : str or None, default=None
+            The name (including the full path) of a YAML file containing 
+            the step sizes to use when calculating the derivatives of the 
+            theory with respect to each parameter included in the Fisher 
+            matrix. Each parameter should have its own block with two entries:
+            a `step_size` (float), giving the step size to use for the 
+            numerical derivatives when varying the parameter up/down; and 
+            the `step_type` (str), which should be `'absolute'`, or 
+            `'relative'` if the `step_size` was given as a fraction of the
+            fiduical parameter value (e.g., a relative step size of 0.01 
+            corresponds to an absolute step size of 1% of the fiducial value).
+            Each parameter in the `fisher_steps_file` must have a fiducial
+            value specified in the `param_file`.
+        feedback : bool, default=False
+            Used if `param_file=None` and/or `fisher_steps_file=None`. If 
+            `feedback=True`, the default `param_file` specifies the HMCode2020 
+            + feedback non-linear model to use for the theory calculation, and 
+            includes a fiducial value for its feedback parameter, with a step
+            size given in the default `fisher_steps_file`. If `False`, the
+            CDM-only model with HMCode2016 is used.
+        fisher_params : None or list of str, default=None
+            An optional list of parameter names to use in the calculation,
+            which must be a sub-set of the parameters in the 
+            `fisher_steps_file`. If `None`, all parameters in the 
+            `fisher_steps_file` are used.
+        use_H0 : bool, default=False
+            Used when the `fisher_steps_file` (or the `fisher_params` list)
+            contains both the Hubble constant `'H0'` and the cosmoMC 
+            approximation to the angular scale of the sound horizon at last
+            scattering, `cosmomc_theta` (or `theta`, defined as 
+            `100 * cosmomc_theta`). Only one of these parameters can be used
+            in the calculation. If `use_H0=True`, `'H0'` is used; otherwise,
+            `'cosmomc_theta'` is used.
+        hd_lmax : int or None, default=None
+            Only used if `exp='hd'`. Must be `1000`, `3000`, `5000`, or `10000`
+            to use a CMB-HD covariance matrix computed to a maximum multipole
+            given by the `hd_lmax` value. Otherwise, the baseline value of
+            20100 is used. Note that we only provide these covariance matrices
+            for the mock delensed CMB power spectra and lensing spectrum,
+            i.e. Fisher matrices can only be calculated from delensed spectra.
+        include_fg : bool, default=True
+            Only used if `exp='hd'`. If `False`, the CMB-HD covariance matrix
+            for the mock lensed CMB power spectra and lensing spectrum was
+            calculated without including the effects of residual extragalactic
+            foregrounds; otherwise, these effects are included. Note that there
+            is no corresponding covariance matrix for delensed spectra that
+            does not include foregrounds, i.e. `include_fg=False` will only
+            exclude foregrounds from the lensed Fisher matrices.
+
+        Raises
+        ------
+        ValueError
+            If an invalid `exp` or `hd_lmax` value was passed, or if the
+            `fisher_steps_file` contains a parameter that wasn't given in
+            the `param_file`.
+
+        Warns
+        -----
+        If any of the arguments will be ignored, and if we do not have 
+        covariance matrices for both lensed and delensed mock spectra, which
+        limits the kind (lensed or delensed) of spectra that can be used to
+        calculate the Fisher matrix.
+
+        Notes
+        -----
+        Copies of the `param_file` and `fisher_steps_file` will be saved in
+        the `fisher_dir`. 
+
+        If you would like the option to switch between using `'H0'` and
+        `'cosmomc_theta'` in your Fisher matrices, you will need to calculate
+        two sets of Fisher derivatives: one that contains derivatives of the 
+        theory with respect to `'cosmomc_theta'` and fixes it when varying the
+        other parameters, and a second that uses `'H0'` instead. You should
+        (re-)initialize the `Fisher` class twice, with `use_H0=False` (to 
+        do the first calculation) and then again with `use_H0=True` (to do
+        the second calculation), with all other arguments unchanged. Then, 
+        you may use either parameter by setting the `use_H0` flag in the
+        `get_fisher` method, which will override the value set here.
+
+        See also
+        --------
+        dataconfig.Data.fiducial_param_file : the default `param_file`.
+        dataconfig.Data.fiducial_fisher_steps_file : the default `fisher_steps_file`.
+        """
         self.datalib = dataconfig.Data()
         self.fisher_dir = fisher_dir
         self.overwrite = overwrite
@@ -611,16 +809,21 @@ class Fisher:
         # check if we have a covariance matrix for this experiment
         self.exp = exp.lower()
         if exp not in self.datalib.cmb_exps:
-            raise ValueError(f"Invalid `exp`: '{exp}'. Valid options are: {datalib.cmb_exps}.")
+            err_msg = f"Invalid `exp`: '{exp}'. Valid options are: {datalib.cmb_exps}."
+            raise ValueError(err_msg)
         # warn about ignored arguments, and which covmats are available
         if exp != 'hd':
-            warnings.warn(f"Ignoring the `hd_lmax` and `include_fg` arguments for `exp = '{exp}'`.")
-            warnings.warn(f"NOTE that we only have mock covariance matrices for *delensed* (as opposed to lensed) CMB spectra for `exp = '{exp}'` (i.e., we can only calculate a Fisher matrix from delensed power spectra in this case).")
+            msg1 = f"Ignoring the `hd_lmax` and `include_fg` arguments for `exp = '{exp}'`."
+            warnings.warn(msg1)
+            msg2 = f"NOTE that we only have mock covariance matrices for *delensed* (as opposed to lensed) CMB spectra for `exp = '{exp}'` (i.e., we can only calculate a Fisher matrix from delensed power spectra in this case)."
+            warnings.warn(msg2)
         else:
             if not include_fg:
-                warnings.warn("NOTE that for CMB-HD, we only have mock covariance matrix that excludes the effects of foregrounds for mock lensed power spectra  (i.e., we can only calculate a Fisher matrix from lensed power spectra in this case).")
+                msg = "NOTE that for CMB-HD, we only have mock covariance matrix that excludes the effects of foregrounds for mock lensed power spectra  (i.e., we can only calculate a Fisher matrix from lensed power spectra in this case)."
+                warnings.warn(msg)
             if hd_lmax is not None:
-                warnings.warn("NOTE that for CMB-HD, we only have mock covariance matrix calculated with a lower `hd_lmax` for *delensed* (as opposed to lensed) CMB spectra (i.e., we can only calculate a Fisher matrix from delensed power spectra in this case).")
+                msg = "NOTE that for CMB-HD, we only have mock covariance matrix calculated with a lower `hd_lmax` for *delensed* (as opposed to lensed) CMB spectra (i.e., we can only calculate a Fisher matrix from delensed power spectra in this case)."
+                warnings.warn(msg)
         # set the multipole limits for the CMB theory calculation
         self.ell_ranges = deepcopy(self.datalib.ell_ranges[self.exp])
         self.Lmin = self.datalib.lmins[exp]
@@ -633,7 +836,8 @@ class Fisher:
                 for spec_type in self.ell_ranges.keys():
                     self.ell_ranges[spec_type][1] = int(hd_lmax)
             else:
-                raise ValueError(f"Invalid `hd_lmax`: {hd_lmax}. Valid options are: {valid_lmax_vals}")
+                err_msg = f"Invalid `hd_lmax`: {hd_lmax}. Valid options are: {valid_lmax_vals}"
+                raise ValueError(err_msg)
         else:
             self.lmax = self.datalib.lmaxs[self.exp]
             self.Lmax = self.datalib.Lmaxs[self.exp]
@@ -648,7 +852,6 @@ class Fisher:
             self.param_file = self.get_param_file(feedback=feedback)
         if fisher_steps_file is None:
             fisher_steps_file = self.get_fisher_steps_file(feedback=feedback)
-
         self.fid_params, self.step_sizes = get_param_info(self.param_file, fisher_steps_file)
         mpi.comm.barrier()
         # create the output directories, and save a copy of the input param 
@@ -672,7 +875,8 @@ class Fisher:
         # make sure we have a step size for that parameter:
         for param in self.fisher_params:
             if param not in self.step_sizes.keys():
-                raise ValueError(f"Invalid parameter `'{param}'` in `fisher_params`: you must provide a fiducial value and step size for `'{param}'` in the `param_file` and `fisher_steps_file`, respectively.")
+                err_msg = f"Invalid parameter `'{param}'` in `fisher_params`: you must provide a fiducial value and step size for `'{param}'` in the `param_file` and `fisher_steps_file`, respectively."
+                raise ValueError(err_msg)
         # remove any fixed params (i.e., not included in `fisher_params`) 
         #  from the `step_sizes` dict:
         step_size_keys = list(self.step_sizes.keys())
@@ -684,7 +888,10 @@ class Fisher:
     # functions called during initialization:
 
     def get_param_file(self, feedback=False):
-        # TODO: docstring
+        """Returns the file name of the YAML file that contains the fiducial
+        cosmological parameter names and values, and any other CAMB settings,
+        if no `param_file` was given during initialization.
+        """
         # look for an input param file in the output directory:
         input_param_file = os.path.join(self.fisher_dir, 'fiducial_params.yaml')
         if os.path.exists(input_param_file) and (not self.overwrite):
@@ -695,7 +902,10 @@ class Fisher:
 
 
     def get_fisher_steps_file(self, feedback=False):
-        # TODO: docstring
+        """Returns the file name of the YAML file that contains the parameter
+        step sizes to be used when calculating the derivatives of the theory,
+        if no `fisher_steps_file` was given during initialization.
+        """
         # look for an input param file in the output directory:
         input_steps_file = os.path.join(self.fisher_dir, 'step_sizes.yaml')
         if os.path.exists(input_steps_file) and (not self.overwrite):
@@ -706,7 +916,9 @@ class Fisher:
 
 
     def save_param_steps_values(self):
-        # TODO: docstring
+        """Saves a copy of the `param_file` and `fisher_steps_file` in 
+        the `fisher_dir` set during initialization.
+        """
         param_values = self.fid_params.copy()
         param_steps = self.step_sizes.copy()
         # ensure float values are actually `float` (not, e.g., `numpy.float64`):
@@ -727,18 +939,25 @@ class Fisher:
 
 
     def check_H0_theta(self):
-        # TODO: docstring
+        """If step sizes were provided for both `'H0'` and `'cosmomc_theta'` 
+        (or `'theta'`), removes one of them from the list of parameters to
+        be used in the calculations, based on the value of `use_H0` set 
+        either during initialization, or when calling any of the methods
+        used to calculate the Fisher matrix.
+        """
         has_H0 = 'H0' in self.fisher_params
         has_theta = ('theta' in self.fisher_params) or ('cosmomc_theta' in self.fisher_params)
         if has_H0 and has_theta:
             if self.use_H0:
                 theta_key = 'theta' if ('theta' in self.fisher_params) else 'cosmomc_theta'
-                warnings.warn(f"Removing '{theta_key}' from the list of varied parameters, because `use_H0=True`.")
+                msg = f"Removing '{theta_key}' from the list of varied parameters, because `use_H0=True`."
+                warnings.warn(msg)
                 self.fid_params.pop(theta_key, None)
                 self.step_sizes.pop(theta_key, None)
                 self.fisher_params.remove(theta_key)
             else:
-                warnings.warn("Removing 'H0' from the list of varied parameters, because `use_H0=False`.")
+                msg = "Removing 'H0' from the list of varied parameters, because `use_H0=False`."
+                warnings.warn(msg)
                 self.fid_params.pop('H0', None)
                 self.step_sizes.pop('H0', None)
                 self.fisher_params.remove('H0')
@@ -747,7 +966,17 @@ class Fisher:
     # functions to calculate the derivatives of theory with respect to params:
 
     def get_varied_param_values(self):
-        # TODO: docstring
+        """Returns a list of tuples containing the names of parameters that 
+        are varied when calculating the Fisher derivatives, and their values 
+        when they are varied away from their fiducial value. If the derivative
+        of the theory with respect to a given parameter has already been saved,
+        it will be excluded from the list, unless `overwrite=True` was passed
+        during initialization.
+
+        See also
+        --------
+        fisher.get_varied_param_values 
+        """
         # we need to choose between H0 or theta, if both are in `fisher_params`;
         #  the choice is based on the `use_H0` flag:
         self.check_H0_theta()
@@ -773,7 +1002,10 @@ class Fisher:
 
     
     def calculate_fisher_derivs(self):
-        # TODO: docstring
+        """Calculate and save the derivatives of the theory with respect to 
+        the parameters. The varied parameters are set during initialization.
+        The calculation can be parallelized using MPI.
+        """
         # get a list of varied parameter names and values:
         param_values = self.get_varied_param_values()
         # distribute the theory calculations among the mpi processes, by
@@ -784,16 +1016,26 @@ class Fisher:
         # loop through the theory calculations, and save the theory for each:
         for idx in task_idxs:
             param, value = param_values[idx]
+            # print some information about what the code is doing
+            if param is None:
+                print(f"[rank {mpi.rank}] Calculating fiducial theory ({idx+1}/{len(task_idxs)})")
+            else:
+                step_dir = 'up' if (value > self.fid_params[param]) else 'down'
+                print(f"[rank {mpi.rank}] Calculating theory when varying '{param}' {step_dir} ({idx+1}/{len(task_idxs)})")
             self.calculate_theory_for_deriv(param, value)
         mpi.comm.barrier()
         # load the theory to calculate and save the derivatives:
         if mpi.rank == 0:
+            print(f"Calculating derivatives of the theory with respect to the following parameters: {self.fisher_params}.")
             for param in self.fisher_params:
                 self.calculate_deriv(param)
 
 
     def calculate_theory_for_deriv(self, param, value):
-        # TODO: docstring
+        """Calculate and save the CMB and BAO theory when the `param` has 
+        the given `value`, with the other parameters fixed to their 
+        fiducial values.
+        """
         # will pass the `cosmo_params` dict to the `theory.Theory` class, to
         #  overide the param value from its fiducial value; we also keep track
         #  of which way the parameter is varied to use in the output file name:
@@ -820,7 +1062,9 @@ class Fisher:
 
 
     def calculate_deriv(self, param):
-        # TODO: docstring
+        """Calculate and save the derivatives of the CMB and BAO theory with 
+        respect to the given `param`.
+        """
         delta_param = 2 * self.step_sizes[param]
         header_info = f'{param}: fiducial = {self.fid_params[param]}, step size = {self.step_sizes[param]}\n'
         # BAO:
@@ -847,7 +1091,46 @@ class Fisher:
     # functions to calculate the Fisher matrix:
 
     def load_cmb_fisher_derivs(self, cmb_types=None, binned=False, use_H0=None):
-        # TODO: docstring
+        """Returns a dict containing the derivatives of the theory spectra
+        for each CMB type in `cmb_types` with respect to each varied parameter.
+
+        Parameters
+        ----------
+        cmb_types : None or list of str, default=None
+            A list of types of theory spectra: can include `'lensed'`, 
+            `'unlensed'`, `'delensed'`. If `None`, uses all available CMB types.
+        binned : bool, default=False
+            If `True`, bin the spectra using the same binning as the covariance 
+            matrix for the mock CMB spectra. If `False`, the spectra are unbinned.
+        use_H0 : bool or None, default=None
+            If `True`, look for derivatives that were calculated by passing `'H0'`
+            to CAMB when varying the other parameters, as opposed to passing
+            `'cosmomc_theta'`; otherwise, look for derivatives that were 
+            calculated by passing `'cosmomc_theta'`. If `None`, use the value of
+            `use_H0` set during initialization.
+
+        Returns
+        -------
+        ells : array_like of float
+            The multipoles at which the derivatives are calculated.
+        derivs : nested dict of array_like of float
+            A nested dictionary of the form `derivs[cmb_type][param][spec]` 
+            for each `cmb_type` in `cmb_types`, `param` in the list of varied 
+            parameters, and `spec` in the list of spectra included in the 
+            covariance matrix (TT, TE, EE, BB, and kappakappa), which holds 
+            the derivative of that spectrum with respect to the parameter, 
+            d(C_ell^XY) / d(param).
+
+        Raises
+        ------
+        ValueError
+            If any `cmb_type` in `cmb_types` is not `'lensed'`, `'unlensed'`, or
+            `'delensed'`.
+        
+        See also
+        --------
+        fisher.load_cmb_fisher_derivs
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         spectra = self.datalib.cov_spectra
@@ -862,7 +1145,30 @@ class Fisher:
 
     
     def load_bao_fisher_derivs(self, use_H0=None):
-        # TODO: docstring
+        """Returns a dict containing the derivatives of the BAO theory with
+        respect to each varied parameter.
+
+        Parameters
+        ----------
+        use_H0 : bool or None, default=None
+            If `True`, look for derivatives that were calculated by passing `'H0'`
+            to CAMB when varying the other parameters, as opposed to passing
+            `'cosmomc_theta'`; otherwise, look for derivatives that were 
+            calculated by passing `'cosmomc_theta'`. If `None`, use the value of
+            `use_H0` set during initialization.
+
+        Returns
+        -------
+        z : array_like of float
+            The redshifts at which the derivatives were calculated.
+        derivs : dict of array_like of float
+            A dictionary whose keys are the parameter names, holding the 
+            derivative of the BAO theory with respect to the each parameter.
+
+        See also
+        --------
+        fisher.load_bao_fisher_derivs
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         z, derivs = load_bao_fisher_derivs(self.derivs_dir, use_H0=use_H0)
@@ -870,11 +1176,68 @@ class Fisher:
 
     
     def calc_cmb_fisher(self, cmb_type, params=None, priors=None, use_H0=None, save=False, fname=None):
-        # TODO: docstring
+        """Calculate the Fisher matrix for the given set of `params` using the
+        covariance matrix for the CMB spectra of the given `cmb_type` and the
+        derivatives of the CMB theory spectra with respect to each parameter.
+
+        Parameters
+        ----------
+        cmb_type : str
+            The type of CMB spectra to use in the calculation: either 
+            `'lensed'` or `'delensed'`. Note that, depending on the arguments
+            passed during the initialization (e.g. the `exp` name), the 
+            mock CMB covariance matrix for the requested `cmb_type` may not 
+            exist.
+        params : None or list of str, default=None
+            A list of parameter names to use. Must have already calculated 
+            derivatives  of the theory with respect to each parameter. If
+            `None`, all available parameters are used (with the choice between
+            `'H0'` and `'cosmomc_theta'` determined by the value of `use_H0`).
+        priors : None or dict of float, default=None 
+            An optional dictionary containing any Gaussian priors to be 
+            applied to the Fisher matrix, with the parameter name as the key
+            and the width of the prior as the value.
+        use_H0 : bool or None, default=None
+            If `True`, the Fisher matrix is formed with derivatives that were 
+            calculated by passing `'H0'` to CAMB when varying the other 
+            parameters, as opposed to passing `'cosmomc_theta'`; otherwise, 
+            use derivatives that were calculated by passing `'cosmomc_theta'`. 
+            Note that the derivatives in either case must have been calculated 
+            already. If `None`, use the value of `use_H0` set during 
+            initialization.
+        save : bool, default=False
+            Whether to save the Fisher matrix in the `fisher_dir` set during
+            initialization. If `True`, must also pass the `fname`.
+        fname : str or None, default=None
+            A file name used when saving the Fisher matrix when `save=True`.
+            The file name should not contain any absolute or relative path.
+
+        Returns
+        -------
+        fisher_matrix : array_like of float
+            The two-dimensional Fisher matrix.
+        params : list of str
+            A list of parameter names, in the same order as their rows/columns
+            in the Fisher matrix.
+
+        Raises
+        ------
+        ValueError
+            If `save=True` but `fname=None`; or if `params` was passed and 
+            the list contains both `'H0'` and `'cosmomc_theta'` or `'theta'`;
+            or if the mock CMB covariance matrix for the requested `cmb_type` 
+            does not exist, based on the experimental configuration set
+            during initialization.
+
+        See also
+        --------
+        fisher.calc_cmb_fisher
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         if save and (fname is None):
-            raise ValueError(f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`.")
+            err_msg = f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`."
+            raise ValueError(err_msg)
         self.check_H0_theta()
         _, derivs = self.load_cmb_fisher_derivs(cmb_types=[cmb_type], binned=True, use_H0=use_H0)
         hd_lmax = self.lmax if (self.exp == 'hd') else None
@@ -884,16 +1247,19 @@ class Fisher:
         has_H0 = 'H0' in params
         has_theta = ('theta' in params) or ('cosmomc_theta' in params)
         if has_H0 and has_theta:
-            raise ValueError(f"Both 'H0' and '{theta_key}' are in `params`: only one can be used.")
+            err_msg = f"Both 'H0' and '{theta_key}' are in `params`: only one can be used."
+            raise ValueError(err_msg)
         elif use_H0 and has_theta:
             theta_key = 'theta' if ('theta' in params) else 'cosmomc_theta'
             theta_idx = params.index(theta_key)
-            warnings.warn(f"Replacing '{theta_key}' with 'H0' because `use_H0=True`.")
+            msg = f"Replacing '{theta_key}' with 'H0' because `use_H0=True`."
+            warnings.warn(msg)
             params[theta_idx] = 'H0'
         elif (not use_H0) and has_H0:
             theta_key = 'theta' if ('theta' in self.all_varied_params) else 'cosmomc_theta'
             H0_idx = params.index('H0')
-            warnings.warn(f"Replacing 'H0' with '{theta_key}' because `use_H0=False`.")
+            msg = f"Replacing 'H0' with '{theta_key}' because `use_H0=False`."
+            warnings.warn(msg)
             params[H0_idx] = theta_key
         if save and (mpi.rank == 0):
             fisher_fname = os.path.join(self.fmat_dir, fname)
@@ -904,11 +1270,59 @@ class Fisher:
 
 
     def calc_bao_fisher(self, params=None, priors=None, use_H0=None, save=False, fname=None):
-        # TODO: docstring
+        """Calculate the Fisher matrix for the given set of `params` using the
+        covariance matrix for the mock DESI BAO data and the derivatives of 
+        the BAO theory with respect to each parameter.
+
+        Parameters
+        ----------
+        params : None or list of str, default=None
+            A list of parameter names to use. Must have already calculated 
+            derivatives  of the theory with respect to each parameter. If
+            `None`, all available parameters are used (with the choice between
+            `'H0'` and `'cosmomc_theta'` determined by the value of `use_H0`).
+        priors : None or dict of float, default=None 
+            An optional dictionary containing any Gaussian priors to be 
+            applied to the Fisher matrix, with the parameter name as the key
+            and the width of the prior as the value.
+        use_H0 : bool or None, default=None
+            If `True`, the Fisher matrix is formed with derivatives that were 
+            calculated by passing `'H0'` to CAMB when varying the other 
+            parameters, as opposed to passing `'cosmomc_theta'`; otherwise, 
+            use derivatives that were calculated by passing `'cosmomc_theta'`. 
+            Note that the derivatives in either case must have been calculated 
+            already. If `None`, use the value of `use_H0` set during 
+            initialization.
+        save : bool, default=False
+            Whether to save the Fisher matrix in the `fisher_dir` set during
+            initialization. If `True`, must also pass the `fname`.
+        fname : str or None, default=None
+            A file name used when saving the Fisher matrix when `save=True`.
+            The file name should not contain any absolute or relative path.
+
+        Returns
+        -------
+        fisher_matrix : array_like of float
+            The two-dimensional Fisher matrix.
+        params : list of str
+            A list of parameter names, in the same order as their rows/columns
+            in the Fisher matrix.
+
+        Raises
+        ------
+        ValueError
+            If `save=True` but `fname=None`; or if `params` was passed and 
+            the list contains both `'H0'` and `'cosmomc_theta'` or `'theta'`.
+
+        See also
+        --------
+        fisher.calc_bao_fisher
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         if save and (fname is None):
-            raise ValueError(f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`.")
+            err_msg = f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`."
+            raise ValueError(err_msg)
         self.check_H0_theta()
         _, derivs = self.load_bao_fisher_derivs(use_H0=use_H0)
         bao_covmat = self.datalib.load_desi_covmat()
@@ -917,16 +1331,19 @@ class Fisher:
         has_H0 = 'H0' in params
         has_theta = ('theta' in params) or ('cosmomc_theta' in params)
         if has_H0 and has_theta:
-            raise ValueError(f"Both 'H0' and '{theta_key}' are in `params`: only one can be used.")
+            err_msg = f"Both 'H0' and '{theta_key}' are in `params`: only one can be used."
+            raise ValueError(err_msg)
         elif use_H0 and has_theta:
             theta_key = 'theta' if ('theta' in params) else 'cosmomc_theta'
             theta_idx = params.index(theta_key)
-            warnings.warn(f"Replacing '{theta_key}' with 'H0' because `use_H0=True`.")
+            msg = f"Replacing '{theta_key}' with 'H0' because `use_H0=True`."
+            warnings.warn(msg)
             params[theta_idx] = 'H0'
         elif (not use_H0) and has_H0:
             theta_key = 'theta' if ('theta' in self.all_varied_params) else 'cosmomc_theta'
             H0_idx = params.index('H0')
-            warnings.warn(f"Replacing 'H0' with '{theta_key}' because `use_H0=False`.")
+            msg = f"Replacing 'H0' with '{theta_key}' because `use_H0=False`."
+            warnings.warn(msg)
             params[H0_idx] = theta_key
         if save and (mpi.rank == 0):
             fisher_fname = os.path.join(self.fmat_dir, fname)
@@ -937,11 +1354,76 @@ class Fisher:
         
     
     def get_fisher(self, cmb_type='delensed', params=None, priors=None, use_H0=None, with_desi=False, save=False, fname=None):
-        # TODO: docstring
+        """Calculate the Fisher matrix for the given set of `params` using the
+        covariance matrix for the CMB spectra of the given `cmb_type` and the
+        derivatives of the CMB theory spectra with respect to each parameter,
+        and optionally combine it with a Fisher matrix for the mock DESI BAO 
+        data.
+
+        Parameters
+        ----------
+        cmb_type : str
+            The type of CMB spectra to use in the calculation: either 
+            `'lensed'` or `'delensed'`. Note that, depending on the arguments
+            passed during the initialization (e.g. the `exp` name), the 
+            mock CMB covariance matrix for the requested `cmb_type` may not 
+            exist.
+        params : None or list of str, default=None
+            A list of parameter names to use. Must have already calculated 
+            derivatives  of the theory with respect to each parameter. If
+            `None`, all available parameters are used (with the choice between
+            `'H0'` and `'cosmomc_theta'` determined by the value of `use_H0`).
+        priors : None or dict of float, default=None 
+            An optional dictionary containing any Gaussian priors to be 
+            applied to the Fisher matrix, with the parameter name as the key
+            and the width of the prior as the value.
+        use_H0 : bool or None, default=None
+            If `True`, the Fisher matrix is formed with derivatives that were 
+            calculated by passing `'H0'` to CAMB when varying the other 
+            parameters, as opposed to passing `'cosmomc_theta'`; otherwise, 
+            use derivatives that were calculated by passing `'cosmomc_theta'`. 
+            Note that the derivatives in either case must have been calculated 
+            already. If `None`, use the value of `use_H0` set during 
+            initialization.
+        with_desi : bool, default=False
+            If `True`, combine the CMB Fisher matrix with the mock DESI BAO
+            Fisher matrix by adding the two. Otherwise, return the CMB-only
+            Fisher matrix.
+        save : bool, default=False
+            Whether to save the Fisher matrix in the `fisher_dir` set during
+            initialization. If `True`, must also pass the `fname`.
+        fname : str or None, default=None
+            A file name used when saving the Fisher matrix when `save=True`.
+            The file name should not contain any absolute or relative path.
+
+        Returns
+        -------
+        fisher_matrix : array_like of float
+            The two-dimensional Fisher matrix.
+        fisher_params : list of str
+            A list of parameter names, in the same order as their rows/columns
+            in the Fisher matrix.
+
+        Raises
+        ------
+        ValueError
+            If `save=True` but `fname=None`; or if `params` was passed and 
+            the list contains both `'H0'` and `'cosmomc_theta'` or `'theta'`;
+            or if the mock CMB covariance matrix for the requested `cmb_type` 
+            does not exist, based on the experimental configuration set
+            during initialization.
+
+        See also
+        --------
+        fisher.calc_cmb_fisher, fisher.Fisher.calc_cmb_fisher
+        fisher.calc_bao_fisher, fisher.Fisher.calc_bao_fisher
+        fisher.Fisher.get_fisher_errors
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         if save and (fname is None):
-            raise ValueError(f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`.")
+            err_msg = f"You set `save=True` but `fname` is None: you must provide a file name, `fname`, that will be used to save the Fisher matrix in the directory `{self.fmat_dir}`."
+            raise ValueError(err_msg)
         # check if we need to calculate a new Fisher matrix, or if we can load it:
         calc_fisher = True
         if fname is not None:
@@ -963,7 +1445,71 @@ class Fisher:
 
 
     def get_fisher_errors(self, cmb_type='delensed', params=None, priors=None, use_H0=None, with_desi=False, save=False, fname=None):
-        # TODO: docstring
+        """Returns the parameter uncertainties obtained from the Fisher matrix 
+        calculated for the given set of `params` using the covariance matrix 
+        for the CMB spectra of the given `cmb_type` and the derivatives of the 
+        CMB theory spectra with respect to each parameter, optionally 
+        combined with a Fisher matrix for the mock DESI BAO data.
+
+        Parameters
+        ----------
+        cmb_type : str
+            The type of CMB spectra to use in the calculation: either 
+            `'lensed'` or `'delensed'`. Note that, depending on the arguments
+            passed during the initialization (e.g. the `exp` name), the 
+            mock CMB covariance matrix for the requested `cmb_type` may not 
+            exist.
+        params : None or list of str, default=None
+            A list of parameter names to use. Must have already calculated 
+            derivatives  of the theory with respect to each parameter, and/or
+            calculated and saved a Fisher matrix using the file name given by 
+            `fname`. If `params=None`, all available parameters are used (with 
+            the choice between `'H0'` and `'cosmomc_theta'` determined by the 
+            value of `use_H0`).
+        priors : None or dict of float, default=None 
+            An optional dictionary containing any Gaussian priors to be 
+            applied to the Fisher matrix, with the parameter name as the key
+            and the width of the prior as the value.
+        use_H0 : bool or None, default=None
+            If `True`, the Fisher matrix is formed with derivatives that were 
+            calculated by passing `'H0'` to CAMB when varying the other 
+            parameters, as opposed to passing `'cosmomc_theta'`; otherwise, 
+            use derivatives that were calculated by passing `'cosmomc_theta'`. 
+            Note that the derivatives in either case must have been calculated 
+            already. If `None`, use the value of `use_H0` set during 
+            initialization.
+        with_desi : bool, default=False
+            If `True`, combine the CMB Fisher matrix with the mock DESI BAO
+            Fisher matrix by adding the two. Otherwise, return the CMB-only
+            Fisher matrix.
+        save : bool, default=False
+            Whether to save the Fisher matrix in the `fisher_dir` set during
+            initialization. If `True`, must also pass the `fname`.
+        fname : str or None, default=None
+            A file name used when saving the Fisher matrix when `save=True`.
+            The file name should not contain any absolute or relative path.
+
+        Returns
+        -------
+        fisher_errors : dict of float
+            A dictionary with the parameter names as the keys and their
+            uncertainties as the values.
+
+        Raises
+        ------
+        ValueError
+            If `save=True` but `fname=None`; or if `params` was passed and 
+            the list contains both `'H0'` and `'cosmomc_theta'` or `'theta'`;
+            or if the mock CMB covariance matrix for the requested `cmb_type` 
+            does not exist, based on the experimental configuration set
+            during initialization.
+
+        See also
+        --------
+        fisher.calc_cmb_fisher, fisher.Fisher.calc_cmb_fisher
+        fisher.calc_bao_fisher, fisher.Fisher.calc_bao_fisher
+        fisher.Fisher.get_fisher
+        """
         if use_H0 is None:
             use_H0 = self.use_H0
         fisher_matrix, fisher_params = self.get_fisher(cmb_type=cmb_type, params=params, priors=priors, use_H0=use_H0, with_desi=with_desi, save=save, fname=fname)

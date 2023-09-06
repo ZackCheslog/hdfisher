@@ -32,7 +32,8 @@ def get_valid_param_files(param_file_dir):
             param_files.append(f)
     # warn the user if we didn't find anything
     if len(param_files) < 1:
-        warnings.warn("Couldn't find any valid parameter YAML files in {param_file_dir}.")
+        msg = f"Couldn't find any valid parameter YAML files in {param_file_dir}."
+        warnings.warn(msg)
     return param_files
 
 
@@ -65,9 +66,11 @@ def get_params(param_file=None):
             param_files = get_valid_param_files(param_set_dir)
             # check if argument matches
             if param_set_fname not in param_files:
-                raise FileNotFoundError(f"You passed `param_file = '{param_file}'`, but the only files found in the directory `{param_set_dir}` are: {param_files}.")
+                err_msg = f"You passed `param_file = '{param_file}'`, but the only files found in the directory `{param_set_dir}` are: {param_files}."
+                raise FileNotFoundError(err_msg)
         else:
-            raise FileNotFoundError(f"Cannot find the `param_file` '{param_file}.'")
+            err_msg = f"Cannot find the `param_file` '{param_file}.'"
+            raise FileNotFoundError(err_msg)
     # now get the params
     with open(param_file, 'r') as f:
         params = yaml.safe_load(f)
@@ -118,7 +121,8 @@ def set_cosmo_params(param_file=None, use_H0=False, **cosmo_params):
         theta_key = 'cosmomc_theta'
         has_theta = (p[theta_key] is not None)
     if (not has_hubble) and (not has_theta):
-        raise ValueError(f"You must provide a value for either `'H0'` or `'cosmomc_theta'` to CAMB; neither was found in the `param_file` '{param_file}'.")
+        err_msg = f"You must provide a value for either `'H0'` or `'cosmomc_theta'` to CAMB; neither was found in the `param_file` '{param_file}'."
+        raise ValueError(err_msg)
     elif (use_H0 or not has_theta) and has_hubble:
         p['cosmomc_theta'] = None
     else:
@@ -127,7 +131,8 @@ def set_cosmo_params(param_file=None, use_H0=False, **cosmo_params):
         if p['cosmomc_theta'] > 0.1: # need theta, not 100 * theta
             p['cosmomc_theta'] /= 100
         if use_H0:
-            warnings.warn(f"You passed `use_H0 = True`, but could not find a value for H0 in the `param_file` '{param_file}'. Passing CosmoMC theta to CAMB instead of H0.")
+            msg = f"You passed `use_H0 = True`, but could not find a value for H0 in the `param_file` '{param_file}'. Passing CosmoMC theta to CAMB instead of H0."
+            warnings.warn(msg)
     if 'theta' in p.keys():
         p.pop('theta', None)
     # camb wants As instead of logA
@@ -702,7 +707,8 @@ class Theory:
             cmb_types = [cmb_types]
         for cmb_type in cmb_types:
             if cmb_type.lower() not in self.cmb_types:
-                raise ValueError(f"You passed `cmb_types = {cmb_types}`, but `{cmb_type}` is not a valid option; must be one of {self.cmb_types}.")
+                err_msg = f"You passed `cmb_types = {cmb_types}`, but `{cmb_type}` is not a valid option; must be one of {self.cmb_types}."
+                raise ValueError(err_msg)
         # get theory for each cmb_type
         theo = {}
         for cmb_type in cmb_types:

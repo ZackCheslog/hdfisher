@@ -4,13 +4,38 @@ import numpy as np
 from . import utils
 
 def camb_theo_fnames(theo_dir, theo_root=None, mkdir=False):
-    #TODO: docstring
-    # if `theo_dir` does not exist, make it or warn the user
+    """Returns a dictionary containing file names used to save the CAMB theory.
+    
+    Parameters
+    ----------
+    theo_dir : str
+        The absolute path to the directory in which the CAMB output will 
+        be saved.
+    theo_root : str or None, default=None
+        If provided, all file names will begin with the `theo_root`.
+    mkdir : bool, default=False
+        If the `theo_dir` does not exist, and `mkdir=True`, the directory
+        will be created; otherwise, the user is only warned that the
+        directory does not exist.
+
+    Returns
+    -------
+    fnames : dict of str
+        A dictionary with a key `'params'` holding the file name used
+        to save information about the `camb.CAMBParams` instance used to
+        calculate the theory; keys `'lensed'`, `'unlensed'`, and `'delensed'`
+        holding the file name used when saving the corresponding CMB theory;
+        a key `'bao'` holding the file name used to save the BAO theory; and
+        a key `'clkk_res'` holding the file name used to save the residual
+        CMB lensing power.
+    """
+    # if `theo_dir` does not exist, make it or warn the user:
     if not os.path.exists(theo_dir):
         if mkdir:
             utils.set_dir(theo_dir)
         else:
-            warnings.warn(f"The `theo_dir` '{theo_dir}' does not exist. Pass `mkdir=True` to automatically create it.")
+            msg = f"The `theo_dir` '{theo_dir}' does not exist. Pass `mkdir=True` to automatically create it."
+            warnings.warn(msg)
     root = '' if theo_root is None else f'{theo_root}_'
     theo_path = lambda x: os.path.join(theo_dir, x)
     file_types = {'params': 'camb_params', 'bao': 'bao_rs_dv', 'clkk_res': 'clkk_res'}
@@ -55,7 +80,8 @@ def fisher_cmb_theo_fname(fisher_theo_dir, cmb_type, param, step_direction, use_
     if param is None:
         fname = f'{cmb_type}_cls_fiducial'
     elif step_direction is None:
-        raise ValueError("You must pass 'up' or 'down' as the `step_direction` argument for `param = '{param}'`.")
+        err_msg = f"You must pass 'up' or 'down' as the `step_direction` argument for `param = '{param}'`."
+        raise ValueError(err_msg)
     else:
         fname = f'{cmb_type}_cls_{param}_{step_direction}'
     if use_H0:
@@ -125,7 +151,8 @@ def fisher_bao_theo_fname(fisher_theo_dir, param, step_direction, use_H0=False):
     if param is None:
         fname = f'bao_rs_dv_fiducial'
     elif step_direction is None:
-        raise ValueError("You must pass 'up' or 'down' as the `step_direction` argument for `param = '{param}'`.")
+        err_msg = f"You must pass 'up' or 'down' as the `step_direction` argument for `param = '{param}'`."
+        raise ValueError(err_msg)
     else:
         fname = f'bao_rs_dv_{param}_{step_direction}'
     if use_H0:

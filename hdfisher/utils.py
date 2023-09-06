@@ -81,7 +81,8 @@ def cl2dl_dict(cls, ells=None, cmb_keys=['tt', 'te', 'ee', 'bb']):
         if 'ells' in cls.keys():
             ells = cls['ells'].copy()
         else:
-            raise ValueError("`ells` is None and `cls['ells']` does not exist: You must pass an array holding the multipoles as either `ells`, or in `cls['ells']`.")
+            err_msg = "`ells` is None and `cls['ells']` does not exist: You must pass an array holding the multipoles as either `ells`, or in `cls['ells']`."
+            raise ValueError(err_msg)
     dls = {'ells': ells.copy()}
     for key in cls.keys():
         if key in cmb_keys:
@@ -204,7 +205,8 @@ def set_dir(dirname):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     elif not os.path.isdir(dirname):
-        raise FileExistsError(f'{dirname} already exists but is not a directory.')
+        err_msg = f'{dirname} already exists but is not a directory.'
+        raise FileExistsError(err_msg)
     return dirname
 
 
@@ -487,7 +489,8 @@ def cov_to_blocks(cov, spectra=['tt', 'te', 'ee', 'bb', 'kk'], ell_ranges=None, 
         nbins = {s: nbin for s in spectra}
     else: # each block may have different number of bins
         if bin_edges is None:
-            raise ValueError('You must also provide the `bin_edges` with the `ell_ranges`.')
+            err_msg = 'You must also provide the `bin_edges` with the `ell_ranges`.'
+            raise ValueError(err_msg)
         else:
             nbins = nbins_per_spectrum(ell_ranges, bin_edges)
     blocks = {}
@@ -561,7 +564,8 @@ def cov_from_blocks(blocks, spectra=['tt', 'te', 'ee', 'bb', 'kk'], ell_ranges=N
         nbin_tot = nbin * nspec
     else: # each block may have different number of bins
         if bin_edges is None:
-            raise ValueError('You must also provide the `bin_edges` with the `ell_ranges`.')
+            err_msg = 'You must also provide the `bin_edges` with the `ell_ranges`.'
+            raise ValueError(err_msg)
         else:
             nbins = nbins_per_spectrum(ell_ranges, bin_edges)
             nbin_tot = sum([nbins[s] for s in spectra])
@@ -630,9 +634,11 @@ def trim_cov(cov, cov_ell_ranges, cov_spectra=['tt', 'te', 'ee', 'bb', 'kk'], el
         spectra = cov_spectra.copy()
     else:
         if any([s not in cov_spectra for s in spectra]):
-            raise ValueError(f"You requested a spectrum in `spectra = {spectra}` that is not in `cov_spectra = {cov_spectra}.")
+            err_msg = f"You requested a spectrum in `spectra = {spectra}` that is not in `cov_spectra = {cov_spectra}."
+            raise ValueError(err_msg)
     if (ell_ranges is not None) and (bin_edges is None):
-        raise ValueError('You must also provide the `bin_edges` with the `ell_ranges`.')
+        err_msg = 'You must also provide the `bin_edges` with the `ell_ranges`.'
+        raise ValueError(err_msg)
     # get the blocks, trim the ell range for each (if necessary), and put the
     # requested blocks back together:
     blocks = cov_to_blocks(cov, spectra=cov_spectra, ell_ranges=cov_ell_ranges, bin_edges=bin_edges)
