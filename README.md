@@ -1,6 +1,6 @@
 # Fisher Forecasting for CMB-HD
 
-This repository contains software to produce Fisher forecasts for CMB-HD. Please cite MacInnis, Sehgal, and Rothermel (2023).
+This repository contains software to produce Fisher forecasts for CMB-HD. Please cite [MacInnis, Sehgal, and Rothermel (2023)](https://arxiv.org/abs/2309.03021).
 
 
 # Installation
