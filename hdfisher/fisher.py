@@ -7,6 +7,12 @@ import pandas as pd
 import yaml
 from . import utils, theory, config, dataconfig, mpi
 
+# when using MPI, only issue a `UserWarning` once:
+if mpi.rank > 0:
+    warnings.simplefilter('ignore', category=UserWarning)
+
+
+
 # functions for derivatives of theory spectra with respect to params:
 
 def get_param_info(param_file, fisher_steps_file):
@@ -687,24 +693,25 @@ class Fisher:
     and BAO covariance matrices provided with `hdfisher`.
     """
     
-    def __init__(self, exp, fisher_dir, overwrite=False, param_file=None, 
+    def __init__(self, fisher_dir, exp='hd', overwrite=False, param_file=None, 
             fisher_steps_file=None, feedback=False, fisher_params=None, 
-            use_H0=False, hd_lmax=None, include_fg=True):
+            use_H0=False, hd_lmax=None, include_fg=True, 
+            hd_data_version='latest'):
         """Initialization for a given experimental configuration and set
         of parameters to be included in the Fisher matrix.
 
         Parameters
         ----------
-        exp : str
-            The name of a CMB experiment, used to load its covariance matrix
-            and set the multipole ranges for the theory that is used to 
-            calculate the Fisher matrix. Must be either `'SO'`, `'S4'`, or 
-            `'HD`'. The name is case-insensitive.
         fisher_dir : str
             The absolute path to a directory in which the theory and its
             derivatives used to calculate the Fisher matrix, and the 
             calculated Fisher matrices, will be saved. The directory will 
             be created if it does not exist.
+        exp : str, default='hd'
+            The name of a CMB experiment, used to load its covariance matrix
+            and set the multipole ranges for the theory that is used to 
+            calculate the Fisher matrix. Must be either `'SO'`, `'S4'`, or 
+            `'HD`'. The name is case-insensitive.
         overwrite : bool, default=False
             If `False`, any Fisher derivatives or matrices that are saved
             in the `fisher_dir` will be loaded. Otherwise, if `True`, the
@@ -766,6 +773,12 @@ class Fisher:
             is no corresponding covariance matrix for delensed spectra that
             does not include foregrounds, i.e. `include_fg=False` will only
             exclude foregrounds from the lensed Fisher matrices.
+        hd_data_version : str, default='latest'
+            The CMB-HD data version to use. This determines which CMB-HD
+            covariance matrix, noise spectra, etc. is used. By default,
+            the latest version is used. To reproduce the results in
+            MacInnis et. al. (2023), use `hd_data_version='v1.0'`.
+            See the `hdMockData` repository for a list of versions.
 
         Raises
         ------
@@ -802,7 +815,7 @@ class Fisher:
         dataconfig.Data.fiducial_param_file : the default `param_file`.
         dataconfig.Data.fiducial_fisher_steps_file : the default `fisher_steps_file`.
         """
-        self.datalib = dataconfig.Data()
+        self.datalib = dataconfig.Data(hd_data_version=hd_data_version)
         self.fisher_dir = fisher_dir
         self.overwrite = overwrite
         self.use_H0 = use_H0
@@ -1517,4 +1530,43 @@ class Fisher:
         return fisher_errors
 
 
+    def load_example_hd_fisher(self, cmb_type='delensed', use_H0=False, with_desi=False):
+        """Returns an example CMB-HD Fisher matrix that was calculated with
+        the correct `hd_data_version`, and a list of the parameters it 
+        contains. All Fisher matrices contain 8 parameters (LCDM + N_eff
+        + sum m_nu) and all have a Gaussian prior of sigma(tau) = 0.007 applied.
+
+        Parameters
+        ----------
+        cmb_type : str, default='delensed'
+            If `cmb_type='delensed'`, the file holds a Fisher matrix calculated
+            from delensed CMB TT, TE, EE, and BB power spectra, in addition to
+            the CMB lensing spectrum. If `cmb_type='lensed'`, the Fisher matrix
+            was computed with lensed CMB spectra instead, as well as the CMB
+            lensing spectrum.
+        use_H0: bool, default=False
+            If `True`, the Hubble constant is used as one of the six LCDM
+            parameters. If `False`, the cosmoMC approximation to the angular
+            scale of the sound horizon at last scattering (multiplied by 100)
+            is used instead.
+        with_desi : bool, default=False
+            If `False`, the Fisher matrix was calculated using only CMB spectra.
+            If `True`, the Fisher matrix is the sum of a CMB and a mock DESI BAO
+            Fisher matrix.
+
+        Returns
+        -------
+        fisher_matrix : array_like of float
+            An array of shape `(8,8)` holding the elements of the Fisher matrix.
+        fisher_params : list of str
+            A list of parameter names for the parameters in the Fisher matrix,
+            in the same order as their corresponding rows/columns.
+
+        Raises
+        ------
+        ValueError
+            If an unrecognized `cmb_type` was passed.
+        """
+        fisher_matrix, fisher_params = self.datalib.load_example_hd_fisher(cmb_type=cmb_type, use_H0=use_H0, with_desi=with_desi)
+        return fisher_matrix, fisher_params
 
