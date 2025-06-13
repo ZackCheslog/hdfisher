@@ -224,9 +224,14 @@ def set_class_params(lmax, param_file=None, use_H0=False, **cosmo_params):
         if k in camb_to_class_params
     }
 
-    if class_params['theta_s_100'] < 0.1:
+    
+    if (class_params['theta_s_100'] is not None and class_params['theta_s_100'] < 0.1):
         class_params['theta_s_100'] *= 100
 
+    for s in class_params.keys():
+        if class_params[s] == None:
+            del class_params[s]
+    
     if class_params['N_ncdm'] == 1:
         class_params['N_ur'] = 2.0308
     elif class_params['N_ncdm'] == 2:
