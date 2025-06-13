@@ -198,7 +198,7 @@ def set_class_params(lmax, param_file=None, use_H0=False, **cosmo_params):
     camb_to_class_params = {
     'ombh2': 'omega_b',            
     'omch2': 'omega_cdm',          
-    'theta': 'theta_s_100',        
+    'cosmomc_theta': 'theta_s_100',        
     'tau': 'tau_reio',             
     'logA': 'ln_A_s_1e10',         
     'As': 'A_s',                    
