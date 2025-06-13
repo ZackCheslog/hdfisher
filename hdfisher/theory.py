@@ -710,7 +710,7 @@ class Theory:
                         self.get_camb_results(save=save)
                     elif self.use_class == True:
                         self.get_class_results(save=save)
-                theo[cmb_type] = get_spectra(self.camb_params, self.class_params, self.lmax, camb_results=self.results, raw_cl=True, CMB_unit='muK', cmb_types=[cmb_type])[cmb_type] 
+                theo[cmb_type] = get_spectra(self.camb_params, self.class_params, self.lmax, camb_results=self.results, raw_cl=True, CMB_unit='muK', cmb_types=[cmb_type], use_class=self.use_class)[cmb_type] 
             # save it
             if save:
                 print(f"saving {cmb_type} theory to {fname}") 
