@@ -207,7 +207,11 @@ def set_class_params(lmax, param_file=None, use_H0=False, **cosmo_params):
     'nnu': 'N_ur',                  
     'mnu': 'm_ncdm',                
     'num_massive_neutrinos': 'N_ncdm',
-    'lmax': 'l_max_scalars'  
+    'lmax': 'l_max_scalars',
+        'nrun': 'alpha_s',
+        'omk': 'Omega_k',
+    #    'w': 'w0_fld',
+     #   'wa': 'wa_fld'
     }
     # 1) get your CAMB-style params
     input_params = set_cosmo_params(
@@ -224,29 +228,24 @@ def set_class_params(lmax, param_file=None, use_H0=False, **cosmo_params):
         if k in camb_to_class_params
     }
 
-    
-    if (class_params['theta_s_100'] is not None and class_params['theta_s_100'] < 0.1):
-        class_params['theta_s_100'] *= 100
+    if 'theta_s_100' in class_params and class_params['theta_s_100'] is not None:
+        if class_params['theta_s_100'] < 0.1:
+            class_params['theta_s_100'] *= 100
+    elif 'theta_s_100' in class_params and class_params['theta_s_100'] is None:
+        class_params.pop('theta_s_100')
 
-    for s in list(class_params.keys()):
-        if class_params[s] is None:
-            del class_params[s]
-    
-    if class_params['N_ncdm'] == 1:
-        class_params['N_ur'] = 2.0308
-    elif class_params['N_ncdm'] == 2:
-        class_params['N_ur'] = 1.0176
-        one_mass = input_params['mnu'] / 2
-        class_params['m_ncdm'] = str(one_mass) + ", " +str(one_mass)
-    elif class_params['N_ncdm'] == 3:
-        class_params['N_ur'] = 1.0176
-        one_mass = input_params['mnu'] / 3
-        class_params['m_ncdm'] = str(one_mass) + ", " +str(one_mass) + ", " +str(one_mass) 
+#    if 'w0' in class_params:
+  #      clp_eq = {'fluid_equation_of_state' : 'CLP'}
+#        class_params.update(clp_eq)
+        
+    class_params['N_ur'] -= (class_params['N_ncdm'] * 1.0132)
     
     if input_params['halofit_version'] == 'mead2016':
         class_params['hmcode_version'] = 2016
     
-
+    if 'H0' in class_params and class_params['H0'] is None:
+        class_params.pop('H0')
+    
     #ACT/fiducial acuracy settings
     class_accuracy_settings = {
     'YHe': 'BBN',
@@ -666,7 +665,13 @@ class Theory:
         if rs_dv is None: # still need to calculate it
             if self.results is None:
                 self.get_camb_results(save=save)
-            rs_dv = self.results.get_BAO(zs, self.camb_params)[:,0]
+            elif type(self.results) == Class:
+                    BAO_results = camb.get_results(self.camb_params)
+                    BAO_results.calc_power_spectra()
+            if self.use_class == False:
+                rs_dv = self.results.get_BAO(zs, self.camb_params)[:,0]
+            elif self.use_class == True:
+                rs_dv = BAO_results.get_BAO(zs, self.camb_params)[:,0]
             if save:
                 header = 'z, r_s/d_V(z)'
                 np.savetxt(fname, np.column_stack([zs, rs_dv]), header=header)
@@ -863,7 +868,10 @@ class Theory:
         for cmb_type in cmb_types:
             if len(list(self.theo[cmb_type].keys())) < len(self.theo_cols):
                 if 'delens' in cmb_type.lower():
-                    theo_spectra = self.get_delensed_spectra(save=save, overwrite=overwrite)
+                    if self.use_class == False:
+                        theo_spectra = self.get_delensed_spectra(save=save, overwrite=overwrite)
+                    elif self.use_class == True:
+                        continue
                 else:
                     theo_spectra = self.get_theory_spectra(save=save, overwrite=overwrite)[cmb_type]
                 theo[cmb_type] = theo_spectra.copy()

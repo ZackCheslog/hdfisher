@@ -106,8 +106,15 @@ def get_varied_param_values(fids, step_sizes, include_fid=True):
     if include_fid:
         param_values.append((None, None))
     for param in step_sizes.keys():
-        param_values.append((param, fids[param] - step_sizes[param]))
-        param_values.append((param, fids[param] + step_sizes[param]))
+
+        if param == 'wa':
+            # Only upwards variations for 'wa'
+            param_values.append((param, fids[param] + 0))
+            param_values.append((param, fids[param] + 2 * step_sizes[param]))
+        else:
+            # Standard up/down variations for others
+            param_values.append((param, fids[param] - step_sizes[param]))
+            param_values.append((param, fids[param] + step_sizes[param]))
     return param_values
 
 
@@ -897,7 +904,8 @@ class Fisher:
             if param not in self.fisher_params:
                 self.step_sizes.pop(param, None)
         self.use_class = use_class
-
+        if self.use_class == True:
+            self.datalib.cmb_types = ['lensed', 'unlensed']
 
     # functions called during initialization:
 
@@ -1067,7 +1075,7 @@ class Fisher:
         rs_dv = theolib.get_rs_dv(self.z, save=False)
         # save the theory
         header_info = f'{param} = {value}\n'
-        for cmb_type in self.datalib.cmb_types:
+        for cmb_type in cmb_theo.keys():
             cmb_theo_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, step_direction, use_H0=self.use_H0)
             utils.save_to_file(cmb_theo_fname, cmb_theo[cmb_type], keys=self.datalib.theo_cols, extra_header_info=header_info)
         bao_theo_fname = config.fisher_bao_theo_fname(self.theo_dir,  param, step_direction, use_H0=self.use_H0)
@@ -1091,15 +1099,29 @@ class Fisher:
         utils.save_to_file(bao_fname, {'z': z, 'rs_dv': rs_dv_deriv}, keys=['z', 'rs_dv'], extra_header_info=header_info)
         # CMB:
         for cmb_type in self.datalib.cmb_types:
-            cmb_theo_up_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'up', use_H0=self.use_H0)
-            cmb_theo_up = utils.load_from_file(cmb_theo_up_fname, self.datalib.theo_cols)
-            cmb_theo_down_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'down', use_H0=self.use_H0)
-            cmb_theo_down = utils.load_from_file(cmb_theo_down_fname, self.datalib.theo_cols)
-            cmb_derivs = {'ells': cmb_theo_up['ells'].copy()}
-            for s in self.datalib.cov_spectra:
-                cmb_derivs[s] = (cmb_theo_up[s] - cmb_theo_down[s]) / delta_param
-            cmb_fname = config.fisher_cmb_deriv_fname(self.derivs_dir, cmb_type, param, use_H0=self.use_H0)
-            utils.save_to_file(cmb_fname, cmb_derivs, keys=self.datalib.theo_cols,  extra_header_info=header_info)
+            if self.use_class == True:
+                if cmb_type == 'delensed':
+                    continue
+                else:
+                    cmb_theo_up_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'up', use_H0=self.use_H0)
+                cmb_theo_up = utils.load_from_file(cmb_theo_up_fname, self.datalib.theo_cols)
+                cmb_theo_down_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'down', use_H0=self.use_H0)
+                cmb_theo_down = utils.load_from_file(cmb_theo_down_fname, self.datalib.theo_cols)
+                cmb_derivs = {'ells': cmb_theo_up['ells'].copy()}
+                for s in self.datalib.cov_spectra:
+                    cmb_derivs[s] = (cmb_theo_up[s] - cmb_theo_down[s]) / delta_param
+                cmb_fname = config.fisher_cmb_deriv_fname(self.derivs_dir, cmb_type, param, use_H0=self.use_H0)
+                utils.save_to_file(cmb_fname, cmb_derivs, keys=self.datalib.theo_cols,  extra_header_info=header_info)
+            else:
+                cmb_theo_up_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'up', use_H0=self.use_H0)
+                cmb_theo_up = utils.load_from_file(cmb_theo_up_fname, self.datalib.theo_cols)
+                cmb_theo_down_fname = config.fisher_cmb_theo_fname(self.theo_dir, cmb_type, param, 'down', use_H0=self.use_H0)
+                cmb_theo_down = utils.load_from_file(cmb_theo_down_fname, self.datalib.theo_cols)
+                cmb_derivs = {'ells': cmb_theo_up['ells'].copy()}
+                for s in self.datalib.cov_spectra:
+                    cmb_derivs[s] = (cmb_theo_up[s] - cmb_theo_down[s]) / delta_param
+                cmb_fname = config.fisher_cmb_deriv_fname(self.derivs_dir, cmb_type, param, use_H0=self.use_H0)
+                utils.save_to_file(cmb_fname, cmb_derivs, keys=self.datalib.theo_cols,  extra_header_info=header_info)
 
 
     # functions to calculate the Fisher matrix:
