@@ -1,4 +1,4 @@
-#Note:
+# Note:
 This is my fork of the CMB-HD fisher forecast code, modified to also work with CLASS. It's still a WIP. 
 
 # Fisher Forecasting for CMB-HD
